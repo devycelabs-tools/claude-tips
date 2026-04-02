@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude + Local Memory: A Practical Guide</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-2: #22263a;
+      --border: #2e3350;
+      --accent: #7c6af7;
+      --accent-dim: #4f3fc7;
+      --green: #3ecf8e;
+      --amber: #f5a623;
+      --red: #e55353;
+      --text: #e8eaf0;
+      --muted: #8b90a8;
+      --code-bg: #141720;
+      --radius: 10px;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Layout */
+    .page-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* Header */
+    .site-header {
+      padding: 56px 0 40px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 56px;
+    }
+    .site-header .eyebrow {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+    .site-header h1 {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 800;
+      letter-spacing: -.02em;
+      line-height: 1.15;
+      margin-bottom: 18px;
+    }
+    .site-header .subtitle {
+      font-size: 18px;
+      color: var(--muted);
+      max-width: 620px;
+    }
+
+    /* Section headings */
+    .section { margin-bottom: 64px; }
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+    .section-label::before {
+      content: '';
+      display: block;
+      width: 18px;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+    h2 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+      margin-bottom: 14px;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    p { color: var(--muted); margin-bottom: 14px; }
+    p strong { color: var(--text); }
+    p:last-child { margin-bottom: 0; }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .card > *:last-child { margin-bottom: 0; }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .card-grid .card { margin-bottom: 0; }
+
+    /* Memory type badge */
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 20px;
+      margin-bottom: 10px;
+    }
+    .badge-user     { background: rgba(124,106,247,.18); color: #a396ff; }
+    .badge-feedback { background: rgba(245,166,35,.15);  color: #f5c04a; }
+    .badge-project  { background: rgba(62,207,142,.15);  color: #3ecf8e; }
+    .badge-reference{ background: rgba(94,166,255,.15);  color: #7ab8ff; }
+
+    /* Code / prompt blocks */
+    .prompt-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin: 16px 0;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: #c7cbe0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .prompt-block .prompt-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    /* Simulated output */
+    .output-block {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin: 0 0 8px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: #c7cbe0;
+    }
+    .output-block .output-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 10px;
+    }
+    .output-block p { color: #c7cbe0; margin-bottom: 8px; }
+    .output-block p:last-child { margin-bottom: 0; }
+    .output-block ul { padding-left: 20px; color: #c7cbe0; margin-bottom: 8px; }
+    .output-block li { margin-bottom: 4px; }
+    .output-block strong { color: #e8eaf0; }
+    .output-block code {
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: #a396ff;
+    }
+
+    /* How-it-works flow */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin: 28px 0;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .flow-step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      font-size: 14px;
+      text-align: center;
+      flex: 1;
+      min-width: 120px;
+    }
+    .flow-step .step-icon { font-size: 22px; margin-bottom: 6px; display: block; }
+    .flow-step .step-label { color: var(--muted); font-size: 12px; margin-top: 4px; display: block; }
+    .flow-arrow {
+      color: var(--accent);
+      font-size: 22px;
+      padding: 0 4px;
+      flex-shrink: 0;
+    }
+
+    /* Table */
+    .ref-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 14px;
+    }
+    .ref-table th {
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 2px solid var(--border);
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .ref-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      vertical-align: top;
+    }
+    .ref-table td:first-child {
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .ref-table tr:last-child td { border-bottom: none; }
+    .ref-table tr:hover td { background: rgba(255,255,255,.02); }
+
+    /* Tip box */
+    .tip {
+      background: rgba(124,106,247,.1);
+      border: 1px solid rgba(124,106,247,.3);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      font-size: 14px;
+      color: #c7cbe0;
+      margin: 20px 0;
+    }
+    .tip strong { color: var(--accent); }
+
+    /* File path block */
+    .filepath-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: #c7cbe0;
+      margin: 16px 0;
+      line-height: 1.9;
+    }
+    .filepath-block .dir  { color: var(--accent); }
+    .filepath-block .file { color: #3ecf8e; }
+    .filepath-block .comment { color: var(--muted); }
+
+    /* Status icons in output */
+    .ok   { color: #3ecf8e; }
+    .warn { color: #f5a623; }
+    .err  { color: #e55353; }
+
+    /* Footer */
+    .site-footer {
+      margin-top: 80px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- ─── HEADER ─────────────────────────────────────────────────────────── -->
+  <header class="site-header">
+    <p class="eyebrow">Claude Code · Local Intelligence</p>
+    <h1>Claude + Local Memory<br>A Practical Guide</h1>
+    <p class="subtitle">How Claude remembers context across sessions, what it stores, and how you can ask it to show its own working.</p>
+  </header>
+
+  <!-- ─── SECTION 1: WHAT IS THE MEMORY SYSTEM ─────────────────────────── -->
+  <section class="section" id="what-is-memory">
+    <div class="section-label">Concept</div>
+    <h2>What is the Memory System?</h2>
+    <p>By default, every Claude Code session starts fresh — no memory of past conversations. The local memory system changes that. Claude writes facts it learns about <strong>you, your project, your preferences, and past decisions</strong> to a set of Markdown files in your config directory.</p>
+    <p>These files are loaded at the start of future sessions, giving Claude persistent context without you having to re-explain everything.</p>
+
+    <div class="flow">
+      <div class="flow-step">
+        <span class="step-icon">💬</span>
+        <strong>Session</strong>
+        <span class="step-label">You work with Claude</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <span class="step-icon">🧠</span>
+        <strong>Claude Learns</strong>
+        <span class="step-label">Non-obvious facts emerge</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <span class="step-icon">💾</span>
+        <strong>Memory Saved</strong>
+        <span class="step-label">Written to .md files</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <span class="step-icon">🔁</span>
+        <strong>Next Session</strong>
+        <span class="step-label">Context pre-loaded</span>
+      </div>
+    </div>
+
+    <h3>Where the files live</h3>
+    <p>Memory files are stored in your Claude config directory, under a project-scoped path:</p>
+
+    <div class="filepath-block">
+<span class="dir">~/.claude/projects/&lt;your-project-path&gt;/memory/</span>
+  <span class="file">MEMORY.md</span>           <span class="comment">← index of all memories (loaded every session)</span>
+  <span class="file">user_role.md</span>         <span class="comment">← who you are, your expertise</span>
+  <span class="file">feedback_testing.md</span>  <span class="comment">← how Claude should approach your work</span>
+  <span class="file">project_auth.md</span>      <span class="comment">← current project decisions + context</span>
+  <span class="file">reference_apis.md</span>    <span class="comment">← pointers to external resources</span>
+    </div>
+
+    <p><strong>MEMORY.md</strong> is an index — one line per memory file. Claude reads it at session start to know what context is available, then reads individual files when they're relevant to the current task.</p>
+
+    <h3 style="margin-top: 32px;">Four types of memory</h3>
+    <div class="card-grid">
+      <div class="card">
+        <span class="badge badge-user">User</span>
+        <h3>Who you are</h3>
+        <p>Your role, expertise, background. Helps Claude tailor explanations to your level and avoid over-explaining things you already know.</p>
+        <p style="color: var(--muted); font-size: 13px; font-style: italic;">"Senior Go engineer, new to this project's React frontend"</p>
+      </div>
+      <div class="card">
+        <span class="badge badge-feedback">Feedback</span>
+        <h3>How to work with you</h3>
+        <p>Corrections and confirmed approaches. Prevents Claude from repeating the same mistake across sessions.</p>
+        <p style="color: var(--muted); font-size: 13px; font-style: italic;">"Don't mock the DB — we got burned when mocks diverged from prod"</p>
+      </div>
+      <div class="card">
+        <span class="badge badge-project">Project</span>
+        <h3>What's happening</h3>
+        <p>Ongoing initiatives, deadlines, architectural decisions, and the "why we chose X over Y" context.</p>
+        <p style="color: var(--muted); font-size: 13px; font-style: italic;">"Auth rewrite is compliance-driven, not tech debt"</p>
+      </div>
+      <div class="card">
+        <span class="badge badge-reference">Reference</span>
+        <h3>Where to look</h3>
+        <p>Pointers to external systems: Linear boards, Grafana dashboards, Slack channels, internal wikis.</p>
+        <p style="color: var(--muted); font-size: 13px; font-style: italic;">"Pipeline bugs tracked in Linear project INGEST"</p>
+      </div>
+    </div>
+
+    <div class="tip" style="margin-top: 28px;">
+      <strong>What Claude won't save:</strong> Code patterns, git history, file contents, or anything derivable by reading the repo. Memory is for the <em>non-obvious</em> stuff — preferences, constraints, decisions, and context that doesn't live in the code itself.
+    </div>
+  </section>
+
+  <!-- ─── SECTION 2: HOW TO QUERY ───────────────────────────────────────── -->
+  <section class="section" id="querying">
+    <div class="section-label">How-to</div>
+    <h2>Asking Claude About Its Own Memory</h2>
+    <p>Claude can read its own memory files and tell you what it knows, what decisions it has recorded, and how it has been instructed to behave. You just have to ask.</p>
+    <p>There's no special command syntax. These are plain English prompts you type at the start of a session.</p>
+
+    <div class="tip">
+      <strong>Tip:</strong> Ask at the start of important sessions — before Claude does anything. It takes 10 seconds and catches stale context before Claude acts on it.
+    </div>
+
+    <table class="ref-table">
+      <thead>
+        <tr>
+          <th>Prompt</th>
+          <th>What it surfaces</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>What do you remember about me?</td>
+          <td>Your profile, expertise, and preferences Claude has saved</td>
+        </tr>
+        <tr>
+          <td>What feedback have you recorded about how to work with me?</td>
+          <td>Corrections and confirmed approaches from past sessions</td>
+        </tr>
+        <tr>
+          <td>What do you know about this project?</td>
+          <td>Current project context, architectural decisions, ongoing work</td>
+        </tr>
+        <tr>
+          <td>Read your MEMORY.md and summarise everything you know</td>
+          <td>Full memory index — all topics Claude has context on</td>
+        </tr>
+        <tr>
+          <td>What decisions have we made that I should know about?</td>
+          <td>Architectural choices, "we chose X over Y" moments</td>
+        </tr>
+        <tr>
+          <td>Is any of your memory about this project outdated?</td>
+          <td>Claude cross-checks memory against current code + git</td>
+        </tr>
+        <tr>
+          <td>Forget everything you know about X</td>
+          <td>Claude deletes or updates a specific memory file</td>
+        </tr>
+        <tr>
+          <td>Remember that [fact]</td>
+          <td>Explicitly adds a memory Claude wouldn't have captured on its own</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ─── SECTION 3+4: EXAMPLES ─────────────────────────────────────────── -->
+  <section class="section" id="examples">
+    <div class="section-label">Examples</div>
+    <h2>Prompts &amp; Simulated Outputs</h2>
+    <p>The following shows real prompts and the kind of response you'd get. Outputs are illustrative — yours will reflect your actual stored memories.</p>
+
+    <!-- Example 1 -->
+    <div class="card">
+      <h3>1 · What do you remember about me?</h3>
+      <div class="prompt-block"><span class="prompt-label">You →</span>Before we start — what do you remember about me?</div>
+      <div class="output-block">
+        <span class="output-label">Claude →</span>
+        <p>Here's what I have saved about you:</p>
+        <ul>
+          <li>You're a <strong>senior backend engineer</strong>, primarily Go, with some Python. Relatively new to the frontend side of this codebase.</li>
+          <li>You prefer <strong>concise responses</strong> — no trailing summaries after completing work.</li>
+          <li>You run <strong>Claude Code locally on macOS</strong>, with the Playwright MCP connected for browser tasks.</li>
+          <li>You're the primary maintainer of the <code>auth-service</code> and carry its on-call rotation.</li>
+        </ul>
+        <p>Want me to correct or add anything before we dive in?</p>
+      </div>
+    </div>
+
+    <!-- Example 2 -->
+    <div class="card">
+      <h3>2 · What feedback have you recorded?</h3>
+      <div class="prompt-block"><span class="prompt-label">You →</span>What feedback have you recorded about how to work with me?</div>
+      <div class="output-block">
+        <span class="output-label">Claude →</span>
+        <p>These behavioral notes are saved from past sessions:</p>
+        <ul>
+          <li><strong>Don't mock the database in tests.</strong> We got burned last quarter — mocked tests passed but the prod migration failed. Integration tests must hit a real DB.</li>
+          <li><strong>Prefer one bundled PR per logical change.</strong> You rejected a split-PR approach last time; bundle refactors in this area.</li>
+          <li><strong>Push to local Forgejo by default,</strong> not GitHub, unless you explicitly ask.</li>
+          <li><strong>Don't auto-launch review subagents</strong> after completing web-builds tasks.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Example 3 -->
+    <div class="card">
+      <h3>3 · What do you know about this project?</h3>
+      <div class="prompt-block"><span class="prompt-label">You →</span>What do you know about the current state of this project?</div>
+      <div class="output-block">
+        <span class="output-label">Claude →</span>
+        <p>From my project memories:</p>
+        <ul>
+          <li><strong>Active work:</strong> <code>feat/auth-rewrite</code> branch — compliance-driven rewrite. Legal flagged the old session token storage. Not tech debt cleanup.</li>
+          <li><strong>Merge freeze:</strong> Non-critical PRs blocked until 2026-04-10 (mobile team release cut).</li>
+          <li><strong>Pending:</strong> Homepage dashboard still needs credentials for qBittorrent, Jellyfin, and Portainer widgets.</li>
+          <li><strong>Decision on record:</strong> Chose pgvector over Elasticsearch for semantic search — lower ops burden at current scale.</li>
+        </ul>
+        <p>Some of this may be stale. Want me to cross-check against the current git log?</p>
+      </div>
+    </div>
+
+    <!-- Example 4 -->
+    <div class="card">
+      <h3>4 · Full memory summary</h3>
+      <div class="prompt-block"><span class="prompt-label">You →</span>Read your MEMORY.md and give me a full summary of everything you know going into this session.</div>
+      <div class="output-block">
+        <span class="output-label">Claude →</span>
+        <p>I've read my memory index. Here's the full picture:</p>
+        <p><strong>About you:</strong> Senior backend engineer (Go/Python), new to this project's React frontend. Prefers concise output, no trailing summaries after completing work.</p>
+        <p><strong>How we work:</strong> Real DB in tests — no mocks. Push to internal Forgejo by default. Bundle refactors into one PR. Don't auto-trigger review agents on web-build tasks.</p>
+        <p><strong>Project state:</strong> Auth rewrite in progress (compliance, not debt). Merge freeze active until Apr 10. Metrics stack (Grafana) is a placeholder — never built. Three dashboard widgets pending credentials.</p>
+        <p><strong>References:</strong> Pipeline bugs → Linear "INGEST". Oncall latency → <code>grafana.internal/d/api-latency</code>. Internal git at <code>git.home.arpa</code>.</p>
+        <p>Anything wrong or outdated?</p>
+      </div>
+    </div>
+
+    <!-- Example 5 -->
+    <div class="card">
+      <h3>5 · Checking for stale memory</h3>
+      <div class="prompt-block"><span class="prompt-label">You →</span>Is any of your memory about this project outdated? Check against the current codebase.</div>
+      <div class="output-block">
+        <span class="output-label">Claude →</span>
+        <p>I checked my memories against the current files and git log:</p>
+        <ul>
+          <li><span class="ok">✓</span> <strong>Auth rewrite context</strong> — confirmed. <code>feat/auth-rewrite</code> is active, 14 commits ahead of main.</li>
+          <li><span class="warn">⚠</span> <strong>pgvector decision</strong> — memory says we chose pgvector, but I can't find the extension in <code>docker-compose.yml</code> or any migrations. Decision logged but may not be implemented yet.</li>
+          <li><span class="ok">✓</span> <strong>Forgejo push preference</strong> — confirmed, <code>local</code> remote is set in git config.</li>
+          <li><span class="err">✗</span> <strong>Merge freeze until Apr 10</strong> — today is Apr 12. Expired. I've removed this memory.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Example 6 -->
+    <div class="card">
+      <h3>6 · Explicitly saving a memory</h3>
+      <div class="prompt-block"><span class="prompt-label">You →</span>Remember that we're migrating off AWS to our own homelab by end of Q2. All new services should be built homelab-first.</div>
+      <div class="output-block">
+        <span class="output-label">Claude →</span>
+        <p>Saved. I've written a project memory:</p>
+        <p><strong>AWS → homelab migration, deadline end of Q2 2026.</strong> All new services should be designed homelab-first. This overrides any suggestions to use managed AWS services (Lambda, RDS, S3, etc.) unless you specifically ask for them.</p>
+        <p>I'll apply this going forward without you needing to mention it again.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── SECTION 5: TIPS ───────────────────────────────────────────────── -->
+  <section class="section" id="tips">
+    <div class="section-label">Best Practices</div>
+    <h2>Getting the Most Out of Local Memory</h2>
+
+    <div class="card">
+      <h3>Start sessions with a memory check</h3>
+      <p>Ask "what do you remember about me?" at the start of important sessions. It takes 10 seconds and catches stale context before Claude acts on it.</p>
+    </div>
+    <div class="card">
+      <h3>Explicitly save non-obvious facts</h3>
+      <p>Claude saves things automatically, but it can't read your mind. If a decision, constraint, or preference matters to future work — say <strong>"remember that…"</strong> out loud. The prompt is the save button.</p>
+    </div>
+    <div class="card">
+      <h3>Correct mistakes immediately</h3>
+      <p>If Claude does something wrong, say <strong>"don't do that — here's why."</strong> That correction gets saved as feedback and prevents the same mistake in future sessions. Corrections are more valuable than instructions given in advance.</p>
+    </div>
+    <div class="card">
+      <h3>Memory ≠ truth</h3>
+      <p>Memories are snapshots in time. File paths get renamed, decisions get reversed, deadlines pass. Ask Claude to verify memory against the current codebase before acting on it for anything important.</p>
+    </div>
+    <div class="card">
+      <h3>The snap command</h3>
+      <p>Before ending a long session or clearing context, say <strong>"snap"</strong> or <strong>"take a memory snapshot"</strong>. Claude will extract the non-obvious things worth saving from the session — decisions, discoveries, constraints — and write them to memory files before you lose the context.</p>
+    </div>
+  </section>
+
+  <!-- ─── FOOTER ─────────────────────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <p>Claude Code · Local Memory System · Reference Guide · 2026</p>
+  </footer>
+
+</div>
+<script src="../nav.js"></script>
+</body>
+</html>

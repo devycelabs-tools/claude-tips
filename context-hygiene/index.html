@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code Context Hygiene: Keep Your Window Fresh</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-2: #22263a;
+      --border: #2e3350;
+      --accent: #7c6af7;
+      --accent-dim: #4f3fc7;
+      --green: #3ecf8e;
+      --amber: #f5a623;
+      --red: #e55353;
+      --cyan: #5eaaff;
+      --text: #e8eaf0;
+      --muted: #8b90a8;
+      --code-bg: #141720;
+      --radius: 10px;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Layout */
+    .page-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* Header */
+    .site-header {
+      padding: 56px 0 40px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 56px;
+    }
+    .site-header .eyebrow {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+    .site-header h1 {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 800;
+      letter-spacing: -.02em;
+      line-height: 1.15;
+      margin-bottom: 18px;
+    }
+    .site-header .subtitle {
+      font-size: 18px;
+      color: var(--muted);
+      max-width: 640px;
+    }
+
+    /* Nav */
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 32px;
+    }
+    .toc a {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 13px;
+      color: var(--muted);
+      transition: border-color .15s, color .15s;
+    }
+    .toc a:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    /* Section headings */
+    .section { margin-bottom: 64px; }
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+    .section-label::before {
+      content: '';
+      display: block;
+      width: 18px;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+    h2 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+      margin-bottom: 14px;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    p { color: var(--muted); margin-bottom: 14px; }
+    p strong { color: var(--text); }
+    p:last-child { margin-bottom: 0; }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .card > *:last-child { margin-bottom: 0; }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .card-grid .card { margin-bottom: 0; }
+
+    /* Tip number */
+    .tip-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(124,106,247,.2);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+    .tip-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .tip-header h3 { margin-bottom: 0; }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 20px;
+      margin-bottom: 10px;
+    }
+    .badge-setup    { background: rgba(62,207,142,.15);  color: #3ecf8e; }
+    .badge-session  { background: rgba(124,106,247,.18); color: #a396ff; }
+    .badge-prompt   { background: rgba(94,170,255,.15);  color: #7ab8ff; }
+    .badge-recovery { background: rgba(245,166,35,.15);  color: #f5c04a; }
+
+    /* Code / command blocks */
+    .cmd-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      margin: 12px 0;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: #c7cbe0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .cmd-block .cmd-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    code {
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: #a396ff;
+    }
+
+    /* Alert / tip box */
+    .tip-box {
+      background: rgba(124,106,247,.1);
+      border: 1px solid rgba(124,106,247,.3);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      font-size: 14px;
+      color: #c7cbe0;
+      margin: 20px 0;
+    }
+    .tip-box strong { color: var(--accent); }
+
+    .warn-box {
+      background: rgba(245,166,35,.08);
+      border: 1px solid rgba(245,166,35,.3);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      font-size: 14px;
+      color: #c7cbe0;
+      margin: 20px 0;
+    }
+    .warn-box strong { color: var(--amber); }
+
+    /* Context meter visual */
+    .meter-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin: 24px 0;
+    }
+    .meter-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .meter-bar {
+      height: 10px;
+      background: var(--surface-2);
+      border-radius: 5px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .meter-fill {
+      height: 100%;
+      border-radius: 5px;
+      background: linear-gradient(90deg, var(--green) 0%, var(--amber) 60%, var(--red) 85%);
+    }
+    .meter-zones {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .zone {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .zone-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Table */
+    .ref-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 14px;
+    }
+    .ref-table th {
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 2px solid var(--border);
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .ref-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      vertical-align: top;
+    }
+    .ref-table td:first-child {
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .ref-table tr:last-child td { border-bottom: none; }
+    .ref-table tr:hover td { background: rgba(255,255,255,.02); }
+    .ref-table td.impact-high   { color: var(--green);  font-weight: 700; font-family: inherit; font-size: 13px; white-space: nowrap; }
+    .ref-table td.impact-medium { color: var(--amber);  font-weight: 700; font-family: inherit; font-size: 13px; white-space: nowrap; }
+
+    /* Footer */
+    .site-footer {
+      margin-top: 80px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .site-footer a { color: var(--muted); }
+    .site-footer a:hover { color: var(--accent); }
+
+    @media (max-width: 600px) {
+      .card-grid { grid-template-columns: 1fr; }
+      .site-footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- ─── HEADER ─────────────────────────────────────────────────────────── -->
+  <header class="site-header">
+    <div class="eyebrow">devycelabs-tools · Claude Code Tips</div>
+    <h1>Context Hygiene</h1>
+    <p class="subtitle">Practical habits that keep your context window from filling up too fast — so Claude stays sharp for longer, in every session.</p>
+    <nav class="toc" aria-label="Sections">
+      <a href="#the-problem">The Problem</a>
+      <a href="#setup">One-Time Setup</a>
+      <a href="#sessions">Session Habits</a>
+      <a href="#prompts">Prompt Hygiene</a>
+      <a href="#recovery">When You're Filling Up</a>
+      <a href="#cheatsheet">Quick Reference</a>
+    </nav>
+  </header>
+
+  <!-- ─── SECTION 0: THE PROBLEM ───────────────────────────────────────── -->
+  <section class="section" id="the-problem">
+    <div class="section-label">Background</div>
+    <h2>Why Context Fills Up</h2>
+    <p>Every message, tool result, file read, and code block in a conversation takes up context. Claude Code sessions can run for hours — that accumulated history eventually crowds out space for new work.</p>
+    <p>When context is nearly full, Claude may start losing earlier parts of the conversation, produce less coherent responses, or get cut off mid-task. The usual causes:</p>
+
+    <div class="card-grid" style="margin-top: 24px; margin-bottom: 28px;">
+      <div class="card">
+        <div class="tip-num">1</div>
+        <h3>Large file reads</h3>
+        <p>Asking Claude to read whole files — especially large ones — dumps all that content into the window at once.</p>
+      </div>
+      <div class="card">
+        <div class="tip-num">2</div>
+        <h3>Long unbroken sessions</h3>
+        <p>Multi-hour conversations accumulate every back-and-forth exchange, even the exploratory ones that led nowhere.</p>
+      </div>
+      <div class="card">
+        <div class="tip-num">3</div>
+        <h3>Repeated re-explanation</h3>
+        <p>Re-stating project background, preferences, and constraints that Claude already knows wastes space every session.</p>
+      </div>
+      <div class="card">
+        <div class="tip-num">4</div>
+        <h3>Broad tool calls</h3>
+        <p>Searches and reads that return hundreds of lines of results — when you only needed a small slice of them.</p>
+      </div>
+    </div>
+
+    <div class="meter-wrap">
+      <div class="meter-label">
+        <span>Context window usage</span>
+        <span>⬆ bad habits accelerate this</span>
+      </div>
+      <div class="meter-bar">
+        <div class="meter-fill" style="width: 88%;"></div>
+      </div>
+      <div class="meter-zones">
+        <div class="zone"><div class="zone-dot" style="background: var(--green);"></div> 0–60% — full power</div>
+        <div class="zone"><div class="zone-dot" style="background: var(--amber);"></div> 60–85% — Claude starts summarising</div>
+        <div class="zone"><div class="zone-dot" style="background: var(--red);"></div> 85%+ — degraded, act now</div>
+      </div>
+    </div>
+
+    <p>The good news: most context burn is preventable with a handful of habits. None of them are complicated — they just need to become automatic.</p>
+  </section>
+
+  <!-- ─── SECTION 1: ONE-TIME SETUP ────────────────────────────────────── -->
+  <section class="section" id="setup">
+    <div class="section-label">One-Time Setup</div>
+    <h2>Put Context Where It Lasts</h2>
+    <p>The highest-leverage move is getting stable context out of the conversation window and into persistent storage — where Claude loads it efficiently rather than you re-stating it every session.</p>
+
+    <div class="card">
+      <span class="badge badge-setup">Setup</span>
+      <div class="tip-header">
+        <div class="tip-num">1</div>
+        <h3>Write a CLAUDE.md for your project</h3>
+      </div>
+      <p>A <code>CLAUDE.md</code> file at the root of your repo is automatically loaded at session start. Put everything Claude needs to know about the project there: tech stack, conventions, which directories to avoid, recurring commands.</p>
+      <p>This replaces the "let me explain the context" paragraph you type at the start of every session. Write it once, update it when things change.</p>
+      <div class="cmd-block">
+        <span class="cmd-label">CLAUDE.md — what to include</span>## Stack
+Node 20 + TypeScript. Tests with Vitest. No Jest.
+
+## Conventions
+- Prefer named exports. No default exports except pages.
+- snake_case for DB columns, camelCase everywhere else.
+
+## Don't touch
+- src/legacy/ — read-only, being sunset by another team
+
+## Run commands
+- Tests: npm test
+- Dev server: npm run dev (port 3000)</div>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-setup">Setup</span>
+      <div class="tip-header">
+        <div class="tip-num">2</div>
+        <h3>Use memory for cross-session facts</h3>
+      </div>
+      <p>Claude Code's memory system (<a href="https://devycelabs-tools.github.io/claude-tips/" target="_blank" rel="noopener">see the memory guide</a>) stores non-obvious facts that don't belong in the codebase: your preferences, architectural decisions, project constraints, and "we chose X because Y" context.</p>
+      <p>Without memory, Claude re-derives this context from scratch every session — burning window space in the process. With memory, it loads a lean summary and reads details only when needed.</p>
+      <div class="tip-box"><strong>Key insight:</strong> Memory isn't just about Claude remembering things. It's about keeping that information <em>out of the active context window</em> until it's actually needed — which is most of the time.</div>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-setup">Setup</span>
+      <div class="tip-header">
+        <div class="tip-num">3</div>
+        <h3>Install only the MCPs you actually use</h3>
+      </div>
+      <p>Every active MCP server adds tool definitions to your context window — even if you never call them. A bloated MCP list silently eats into available space before you've typed a single message.</p>
+      <p>Audit your MCP config periodically. Disable servers you haven't used in weeks. Prefer focused MCPs over general-purpose ones that expose 30+ tools you'll never need.</p>
+    </div>
+  </section>
+
+  <!-- ─── SECTION 2: SESSION HABITS ────────────────────────────────────── -->
+  <section class="section" id="sessions">
+    <div class="section-label">During Each Session</div>
+    <h2>Keep Sessions Focused</h2>
+    <p>Context fills fastest when sessions sprawl. Staying focused on one concern per session is the single biggest behavioural change you can make.</p>
+
+    <div class="card">
+      <span class="badge badge-session">Session</span>
+      <div class="tip-header">
+        <div class="tip-num">4</div>
+        <h3>One task per session</h3>
+      </div>
+      <p>When a session spans multiple unrelated tasks, context from task A is still present when you start task B — and task C — even though it's no longer useful. Each context switch compounds the waste.</p>
+      <p>Finish a task, use <code>/clear</code> to wipe the slate, then start the next one fresh. The cleared session doesn't lose any work — it loses the conversation history you no longer need.</p>
+      <div class="cmd-block"><span class="cmd-label">command</span>/clear</div>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-session">Session</span>
+      <div class="tip-header">
+        <div class="tip-num">5</div>
+        <h3>Cut off exploratory dead ends early</h3>
+      </div>
+      <p>When an approach isn't working and you pivot, the failed exploration stays in context even after you've moved on. It confuses future responses and burns space.</p>
+      <p>If a long exploration goes nowhere, <code>/clear</code> and restart with a tighter prompt. You don't lose the insight — you gained that from reading the output. You just stop carrying the dead weight.</p>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-session">Session</span>
+      <div class="tip-header">
+        <div class="tip-num">6</div>
+        <h3>Break large features across sessions</h3>
+      </div>
+      <p>Implementing a large feature in one marathon session accumulates design discussions, implementation attempts, and back-and-forth into one giant window. By the end, Claude may be working with a compressed view of what happened at the start.</p>
+      <p>Instead: design in one session, implement in another. Commit progress between sessions. A <code>CLAUDE.md</code> or story file carries the handoff context efficiently.</p>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-session">Session</span>
+      <div class="tip-header">
+        <div class="tip-num">7</div>
+        <h3>Use subagents for isolated, heavy work</h3>
+      </div>
+      <p>When Claude uses the Agent tool to spawn a subagent (e.g. to explore a codebase, run tests, or do research), the subagent's full read/search output is summarised before it comes back — not dumped verbatim into your window.</p>
+      <p>For tasks that involve reading lots of files or doing broad searches, explicitly asking Claude to delegate to a subagent keeps the detail out of the main window. The main conversation only sees the conclusion.</p>
+      <div class="cmd-block"><span class="cmd-label">example</span>Use a subagent to find all usages of the old auth pattern across the codebase and summarise them — I don't need the raw results.</div>
+    </div>
+  </section>
+
+  <!-- ─── SECTION 3: PROMPT HYGIENE ────────────────────────────────────── -->
+  <section class="section" id="prompts">
+    <div class="section-label">How You Write Prompts</div>
+    <h2>Prompt Hygiene</h2>
+    <p>How you phrase requests directly affects how much context each exchange consumes. Vague prompts generate more back-and-forth. Overly broad requests pull in more data than you need.</p>
+
+    <div class="card">
+      <span class="badge badge-prompt">Prompt</span>
+      <div class="tip-header">
+        <div class="tip-num">8</div>
+        <h3>Be specific — file + line beats vague description</h3>
+      </div>
+      <p>A vague prompt creates a diagnostic loop: Claude asks clarifying questions, reads around the problem area, makes a wrong guess, you correct it. Each exchange costs context.</p>
+      <p>A specific prompt goes straight to implementation. The difference in context cost can be 3–5x.</p>
+      <div class="cmd-block">
+        <span class="cmd-label">vague (expensive)</span>Something seems off with the login flow.</div>
+      <div class="cmd-block" style="border-left-color: var(--green);">
+        <span class="cmd-label" style="color: var(--green);">specific (cheap)</span>Fix the validation logic in src/auth/login.ts at line 84 — it's rejecting valid email addresses that contain a + character.</div>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-prompt">Prompt</span>
+      <div class="tip-header">
+        <div class="tip-num">9</div>
+        <h3>Don't paste files — let Claude read them</h3>
+      </div>
+      <p>Pasting a file into the chat adds its full content to context immediately. Claude reading it with the Read tool does the same thing — but only when it actually needs it, and only the relevant portion.</p>
+      <p>Never paste large files into the conversation. If you want Claude to look at a file, say the path and let it read it on demand.</p>
+      <div class="warn-box"><strong>Watch out for:</strong> Asking Claude to "take a look at everything in src/" — that's an implicit instruction to read potentially dozens of files upfront. Prefer targeted asks: "Look at src/auth/login.ts and src/auth/session.ts."</div>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-prompt">Prompt</span>
+      <div class="tip-header">
+        <div class="tip-num">10</div>
+        <h3>Don't repeat context Claude already has</h3>
+      </div>
+      <p>If your project context is in <code>CLAUDE.md</code> and your preferences are in memory, you don't need to restate them. Prepending every message with "as I mentioned, this is a TypeScript project using Vitest…" adds tokens without adding information.</p>
+      <p>Trust the loaded context. If Claude seems to have forgotten something, ask it to re-read the relevant file — don't repeat it inline.</p>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-prompt">Prompt</span>
+      <div class="tip-header">
+        <div class="tip-num">11</div>
+        <h3>Ask for targeted searches, not full scans</h3>
+      </div>
+      <p>Prompts like "search the whole codebase for X" can return hundreds of results. You usually only needed to know <em>if</em> X exists and <em>where</em>. Ask for the specific thing you need:</p>
+      <div class="cmd-block">
+        <span class="cmd-label">instead of</span>Search the whole codebase for any reference to the old payment API.</div>
+      <div class="cmd-block" style="border-left-color: var(--green);">
+        <span class="cmd-label" style="color: var(--green);">prefer</span>Find all files under src/ that import from @acme/payments-v1 — just the file names.</div>
+    </div>
+  </section>
+
+  <!-- ─── SECTION 4: RECOVERY ───────────────────────────────────────────── -->
+  <section class="section" id="recovery">
+    <div class="section-label">When You're Running Low</div>
+    <h2>Recovery Tactics</h2>
+    <p>Even with good habits, long sessions fill up. Here's how to handle it without losing your work.</p>
+
+    <div class="card">
+      <span class="badge badge-recovery">Recovery</span>
+      <div class="tip-header">
+        <div class="tip-num">12</div>
+        <h3>Use /compact to summarise history</h3>
+      </div>
+      <p>Claude Code's <code>/compact</code> command replaces the full conversation history with a compressed summary, freeing up substantial space while keeping Claude oriented on what you're doing.</p>
+      <p>Run it proactively — before you hit the wall — rather than waiting until Claude is already degraded. A good time: after finishing a discrete chunk of work but before starting the next phase.</p>
+      <div class="cmd-block"><span class="cmd-label">command</span>/compact</div>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-recovery">Recovery</span>
+      <div class="tip-header">
+        <div class="tip-num">13</div>
+        <h3>Ask for a summary before you /clear</h3>
+      </div>
+      <p>Before clearing a session with important in-progress context, ask Claude to summarise the current state — decisions made, what changed, and what comes next. Even a short paragraph pasted into a note is enough to re-orient the next session quickly.</p>
+      <p>This takes 10 seconds and costs almost nothing. Skipping it and trying to reconstruct context from scratch costs much more.</p>
+      <div class="cmd-block"><span class="cmd-label">prompt</span>Before I clear — summarise where we are: what the goal is, what we've done, and what the immediate next step is.</div>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-recovery">Recovery</span>
+      <div class="tip-header">
+        <div class="tip-num">14</div>
+        <h3>Write a handoff note to the next session</h3>
+      </div>
+      <p>If you're mid-task and running out of context, ask Claude to write a concise handoff: what the goal is, what's been done, what the next step is, and any gotchas discovered. Save it to a file (<code>.claude/stories/current.md</code> is a good convention).</p>
+      <p>Then <code>/clear</code> and start fresh with "read .claude/stories/current.md and continue." The new session starts oriented without re-reading the whole history.</p>
+      <div class="cmd-block">
+        <span class="cmd-label">prompt to generate a handoff</span>Write a concise handoff note to .claude/stories/current.md covering: the goal, what we've done so far, the next step, and any gotchas I should know.</div>
+    </div>
+  </section>
+
+  <!-- ─── SECTION 5: CHEATSHEET ─────────────────────────────────────────── -->
+  <section class="section" id="cheatsheet">
+    <div class="section-label">Quick Reference</div>
+    <h2>All Tips at a Glance</h2>
+
+    <table class="ref-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Tip</th>
+          <th>When</th>
+          <th>Impact</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td style="color: var(--text);">Write a CLAUDE.md for your project</td>
+          <td>One-time setup</td>
+          <td class="impact-high">High</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td style="color: var(--text);">Use memory for cross-session facts</td>
+          <td>One-time setup</td>
+          <td class="impact-high">High</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td style="color: var(--text);">Trim unused MCPs from config</td>
+          <td>Periodic audit</td>
+          <td class="impact-medium">Medium</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td style="color: var(--text);">One task per session — /clear between</td>
+          <td>Every session</td>
+          <td class="impact-high">High</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td style="color: var(--text);">Cut off dead-end explorations early</td>
+          <td>During session</td>
+          <td class="impact-medium">Medium</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td style="color: var(--text);">Break large features across sessions</td>
+          <td>Planning</td>
+          <td class="impact-high">High</td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td style="color: var(--text);">Delegate heavy reads to subagents</td>
+          <td>During session</td>
+          <td class="impact-medium">Medium</td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td style="color: var(--text);">Be specific — file + line not vague description</td>
+          <td>Every prompt</td>
+          <td class="impact-high">High</td>
+        </tr>
+        <tr>
+          <td>9</td>
+          <td style="color: var(--text);">Don't paste files — give the path</td>
+          <td>Every prompt</td>
+          <td class="impact-high">High</td>
+        </tr>
+        <tr>
+          <td>10</td>
+          <td style="color: var(--text);">Don't repeat context that's already loaded</td>
+          <td>Every prompt</td>
+          <td class="impact-medium">Medium</td>
+        </tr>
+        <tr>
+          <td>11</td>
+          <td style="color: var(--text);">Ask for targeted searches, not full scans</td>
+          <td>Every prompt</td>
+          <td class="impact-medium">Medium</td>
+        </tr>
+        <tr>
+          <td>12</td>
+          <td style="color: var(--text);">/compact to free space without losing thread</td>
+          <td>When filling up</td>
+          <td class="impact-high">High</td>
+        </tr>
+        <tr>
+          <td>13</td>
+          <td style="color: var(--text);">Ask for a summary before /clear</td>
+          <td>Before /clear</td>
+          <td class="impact-medium">Medium</td>
+        </tr>
+        <tr>
+          <td>14</td>
+          <td style="color: var(--text);">Write a handoff note, then /clear</td>
+          <td>Mid-task context crunch</td>
+          <td class="impact-high">High</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="tip-box" style="margin-top: 28px;">
+      <strong>The short version:</strong> Write context down (CLAUDE.md + memory), keep sessions focused on one thing, be specific in prompts, and use <code>/compact</code> before you're desperate. Do these four things and you'll rarely hit the wall.
+    </div>
+  </section>
+
+  <!-- ─── FOOTER ────────────────────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <span>devycelabs-tools · Claude Code Tips</span>
+    <span>
+      <a href="https://devycelabs-tools.github.io/claude-tips/" target="_blank" rel="noopener">Claude Memory Guide</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/devycelabs-tools" target="_blank" rel="noopener">GitHub</a>
+    </span>
+  </footer>
+
+</div>
+<script src="../nav.js"></script>
+</body>
+</html>

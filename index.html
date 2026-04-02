@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code Tips — devycelabs-tools</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-2: #22263a;
+      --border: #2e3350;
+      --accent: #7c6af7;
+      --green: #3ecf8e;
+      --amber: #f5a623;
+      --text: #e8eaf0;
+      --muted: #8b90a8;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+      min-height: 100vh;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .page-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    .site-header {
+      padding: 72px 0 56px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 56px;
+    }
+    .eyebrow {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: clamp(32px, 6vw, 52px);
+      font-weight: 800;
+      letter-spacing: -.03em;
+      line-height: 1.1;
+      margin-bottom: 20px;
+    }
+    .subtitle {
+      font-size: 18px;
+      color: var(--muted);
+      max-width: 560px;
+      line-height: 1.6;
+    }
+
+    .guides-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .guides-label::before {
+      content: '';
+      display: block;
+      width: 18px;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    .guide-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      margin-bottom: 16px;
+      text-decoration: none;
+      transition: border-color .15s, background .15s;
+      color: inherit;
+    }
+    .guide-card:hover {
+      border-color: var(--accent);
+      background: var(--surface-2);
+      text-decoration: none;
+    }
+    .guide-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(124,106,247,.18);
+      color: var(--accent);
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .guide-body { flex: 1; min-width: 0; }
+    .guide-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    .guide-desc {
+      font-size: 15px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    .guide-arrow {
+      color: var(--accent);
+      font-size: 20px;
+      align-self: center;
+      flex-shrink: 0;
+      opacity: 0.5;
+      transition: opacity .15s, transform .15s;
+    }
+    .guide-card:hover .guide-arrow {
+      opacity: 1;
+      transform: translateX(4px);
+    }
+
+    .guide-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .tag {
+      background: rgba(124,106,247,.12);
+      color: #a396ff;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 20px;
+    }
+
+    .footer {
+      margin-top: 64px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .footer a { color: var(--muted); }
+    .footer a:hover { color: var(--accent); text-decoration: none; }
+
+    @media (max-width: 560px) {
+      .guide-card { flex-direction: column; gap: 16px; }
+      .guide-arrow { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <header class="site-header">
+    <div class="eyebrow">devycelabs-tools</div>
+    <h1>Claude Code Tips</h1>
+    <p class="subtitle">Practical guides for getting more out of Claude Code — from memory and context management to session hygiene.</p>
+  </header>
+
+  <div class="guides-label">Guides</div>
+
+  <a class="guide-card" href="memory-guide/">
+    <div class="guide-num">1</div>
+    <div class="guide-body">
+      <div class="guide-title">Claude + Local Memory</div>
+      <div class="guide-desc">Set up persistent cross-session memory so Claude remembers your preferences, decisions, and project context — without re-explaining every session.</div>
+      <div class="guide-tags">
+        <span class="tag">Memory</span>
+        <span class="tag">CLAUDE.md</span>
+        <span class="tag">Setup</span>
+      </div>
+    </div>
+    <div class="guide-arrow">→</div>
+  </a>
+
+  <a class="guide-card" href="context-hygiene/">
+    <div class="guide-num">2</div>
+    <div class="guide-body">
+      <div class="guide-title">Context Hygiene</div>
+      <div class="guide-desc">Practical habits that keep your context window from filling up too fast — so Claude stays sharp for longer, in every session.</div>
+      <div class="guide-tags">
+        <span class="tag">Context</span>
+        <span class="tag">Sessions</span>
+        <span class="tag">Prompts</span>
+      </div>
+    </div>
+    <div class="guide-arrow">→</div>
+  </a>
+
+  <footer class="footer">
+    <span>devycelabs-tools</span>
+    <a href="https://github.com/devycelabs-tools" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+
+</div>
+</body>
+</html>

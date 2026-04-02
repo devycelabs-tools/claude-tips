@@ -1,0 +1,15 @@
+{
+  "title": "devycelabs-tools · Claude Code Tips",
+  "pages": [
+    {
+      "title": "Memory Guide",
+      "url": "memory-guide/",
+      "desc": "Persistent cross-session memory with CLAUDE.md and memory files"
+    },
+    {
+      "title": "Context Hygiene",
+      "url": "context-hygiene/",
+      "desc": "Keep your context window fresh and avoid running out mid-task"
+    }
+  ]
+}
