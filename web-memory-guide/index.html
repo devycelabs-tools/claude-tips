@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude on the Web: How Memory Actually Works</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-2: #22263a;
+      --border: #2e3350;
+      --accent: #7c6af7;
+      --accent-dim: #4f3fc7;
+      --green: #3ecf8e;
+      --amber: #f5a623;
+      --red: #e55353;
+      --text: #e8eaf0;
+      --muted: #8b90a8;
+      --code-bg: #141720;
+      --radius: 10px;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .page-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* Header */
+    .site-header {
+      padding: 56px 0 40px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 56px;
+    }
+    .site-header .eyebrow {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+    .site-header h1 {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 800;
+      letter-spacing: -.02em;
+      line-height: 1.15;
+      margin-bottom: 18px;
+    }
+    .site-header .subtitle {
+      font-size: 18px;
+      color: var(--muted);
+      max-width: 640px;
+    }
+
+    /* Sections */
+    .section { margin-bottom: 64px; }
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+    .section-label::before {
+      content: '';
+      display: block;
+      width: 18px;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+    h2 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+      margin-bottom: 14px;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    p { color: var(--muted); margin-bottom: 14px; }
+    p strong { color: var(--text); }
+    p:last-child { margin-bottom: 0; }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .card > *:last-child { margin-bottom: 0; }
+
+    /* Layer stack */
+    .layer-stack { margin: 28px 0; }
+    .layer {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 12px;
+    }
+    .layer .layer-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .layer h3 { margin-bottom: 0; color: var(--text); }
+    .layer .layer-tag {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(124,106,247,.12);
+      padding: 3px 9px;
+      border-radius: 20px;
+    }
+    .layer p { margin-bottom: 0; }
+    .layer.reliable { border-left-color: var(--green); }
+    .layer.reliable .layer-tag { color: var(--green); background: rgba(62,207,142,.12); }
+    .layer.mixed    { border-left-color: var(--amber); }
+    .layer.mixed .layer-tag    { color: var(--amber); background: rgba(245,166,35,.12); }
+
+    /* Callout boxes */
+    .callout {
+      background: rgba(124,106,247,.08);
+      border: 1px solid rgba(124,106,247,.3);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 18px 22px;
+      margin: 20px 0;
+      color: #c7cbe0;
+      font-size: 15px;
+    }
+    .callout strong { color: var(--accent); }
+    .callout.warn {
+      background: rgba(245,166,35,.06);
+      border-color: rgba(245,166,35,.3);
+      border-left-color: var(--amber);
+    }
+    .callout.warn strong { color: var(--amber); }
+    .callout.bad {
+      background: rgba(229,83,83,.06);
+      border-color: rgba(229,83,83,.3);
+      border-left-color: var(--red);
+    }
+    .callout.bad strong { color: var(--red); }
+
+    /* Symptom → cause cards */
+    .symptom-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 26px;
+      margin-bottom: 14px;
+    }
+    .symptom-card .quote {
+      font-style: italic;
+      color: #c7cbe0;
+      font-size: 15px;
+      padding-left: 14px;
+      border-left: 3px solid var(--border);
+      margin-bottom: 14px;
+    }
+    .symptom-card .cause-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .symptom-card p { margin-bottom: 10px; }
+    .symptom-card p:last-child { margin-bottom: 0; }
+
+    /* Comparison table */
+    .ref-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 14px;
+    }
+    .ref-table th {
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 2px solid var(--border);
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .ref-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      vertical-align: top;
+    }
+    .ref-table td:first-child {
+      color: var(--text);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .ref-table tr:last-child td { border-bottom: none; }
+
+    /* Fix checklist */
+    .fix-list { list-style: none; padding: 0; margin: 16px 0 0; }
+    .fix-list li {
+      position: relative;
+      padding: 14px 18px 14px 48px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 10px;
+      color: #c7cbe0;
+      font-size: 15px;
+    }
+    .fix-list li::before {
+      content: '✓';
+      position: absolute;
+      left: 18px;
+      top: 14px;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--green);
+      font-weight: 700;
+    }
+    .fix-list li strong { color: var(--text); }
+
+    /* Footer */
+    .site-footer {
+      margin-top: 80px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- ─── HEADER ─────────────────────────────────────────────────────────── -->
+  <header class="site-header">
+    <p class="eyebrow">Claude.ai · Memory &amp; Context</p>
+    <h1>Claude on the Web<br>How Memory Actually Works</h1>
+    <p class="subtitle">Why Claude sometimes forgets things you told it, why it sometimes mixes up details from other conversations, and how to set up the web app so it stops happening.</p>
+  </header>
+
+  <!-- ─── SECTION 1: THE THREE LAYERS ──────────────────────────────────── -->
+  <section class="section" id="three-layers">
+    <div class="section-label">Mental model</div>
+    <h2>Three layers, not one</h2>
+    <p>When people say "Claude's memory" on the web, they usually mean one thing. It's actually three different systems stacked on top of each other, and they behave very differently. Knowing which layer a fact lives in is the single biggest predictor of whether Claude will get it right next time.</p>
+
+    <div class="layer-stack">
+      <div class="layer reliable">
+        <div class="layer-head">
+          <h3>1 · Project Instructions</h3>
+          <span class="layer-tag">Always loaded · Authoritative</span>
+        </div>
+        <p>A custom prompt attached to a Project. Every conversation in that Project starts with this text loaded verbatim. <strong>If it's written here, Claude sees it on turn one, every time.</strong> This is where rules, preferences, and non-negotiable constraints belong.</p>
+      </div>
+
+      <div class="layer reliable">
+        <div class="layer-head">
+          <h3>2 · Project Knowledge</h3>
+          <span class="layer-tag">On demand · Reliable</span>
+        </div>
+        <p>Files you upload to a Project (docs, specs, schemas, style guides, transcripts). Claude searches them when a question touches their content. <strong>Canonical reference material belongs here</strong> — not in a past chat and not in memory.</p>
+      </div>
+
+      <div class="layer mixed">
+        <div class="layer-head">
+          <h3>3 · Memory (auto-captured)</h3>
+          <span class="layer-tag">Retrieved · Lossy</span>
+        </div>
+        <p>Compressed summaries of past conversations that Claude can surface in later chats. Useful, but <strong>never a source of truth</strong>. Memory is retrieved by similarity, summarised aggressively, and can conflate details from different conversations. This is the layer people think of as "Claude's memory" — and it's the one that forgets and mixes things up.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>The rule:</strong> if a fact matters, promote it up the stack. Memory → Knowledge → Instructions. Anything critical goes in Instructions. Anything stable goes in Knowledge. Memory is a convenience, not a contract.
+    </div>
+  </section>
+
+  <!-- ─── SECTION 2: WHY IT FORGETS ────────────────────────────────────── -->
+  <section class="section" id="forgetting">
+    <div class="section-label">Symptom → cause</div>
+    <h2>Why Claude "forgets"</h2>
+    <p>Forgetting on the web almost never means the information was deleted. It means one of four very specific things happened. Each has a different fix.</p>
+
+    <div class="symptom-card">
+      <p class="quote">"I told it this yesterday and today it has no idea."</p>
+      <p class="cause-label">Cause · Conversation scoping</p>
+      <p>You told it in <em>a different conversation</em>. By default, two chats don't share anything unless they live in the same Project and memory has captured the detail. A brand-new chat is a brand-new context — the previous one may as well not exist.</p>
+      <p><strong>Fix:</strong> work inside Projects, and put anything you want to survive across chats into Instructions or Knowledge — not into the chat itself.</p>
+    </div>
+
+    <div class="symptom-card">
+      <p class="quote">"It remembered the gist but got the specifics wrong."</p>
+      <p class="cause-label">Cause · Lossy summarisation</p>
+      <p>Memory isn't a transcript. It's a compressed summary — Claude keeps the shape of what you discussed, not the exact numbers, names, or code. The longer ago the conversation, and the longer that conversation was, the more detail has been squeezed out.</p>
+      <p><strong>Fix:</strong> don't rely on memory for exact values. For anything precise — API keys, version numbers, file paths, quoted text — put it in Knowledge as a file, or state it again at the start of the chat.</p>
+    </div>
+
+    <div class="symptom-card">
+      <p class="quote">"I set a preference weeks ago. It's ignoring it now."</p>
+      <p class="cause-label">Cause · Retrieval miss</p>
+      <p>Memory is searched, not loaded. If the current conversation doesn't look semantically similar to the chat where you set that preference, retrieval can miss it entirely. The memory is still there — Claude just didn't pull it this time.</p>
+      <p><strong>Fix:</strong> preferences are instructions, not memory. Put them in Project Instructions so they load every turn regardless of what the conversation is about.</p>
+    </div>
+
+    <div class="symptom-card">
+      <p class="quote">"The long chat started losing earlier details."</p>
+      <p class="cause-label">Cause · Context compression</p>
+      <p>Inside a single long conversation, older turns get summarised as the chat grows. This is separate from cross-chat memory — it's the model making room for new content by compressing what came before. Early instructions can soften or drift.</p>
+      <p><strong>Fix:</strong> for long work, anchor the rules in Instructions (not the first message of the chat), and periodically re-state the constraints when you notice drift. Or start a fresh chat for a new phase.</p>
+    </div>
+  </section>
+
+  <!-- ─── SECTION 3: WHY IT MIXES THINGS UP ────────────────────────────── -->
+  <section class="section" id="mixing">
+    <div class="section-label">Symptom → cause</div>
+    <h2>Why Claude "mixes things up"</h2>
+    <p>Mixing is more confusing than forgetting because Claude sounds confident while being wrong. It's almost always one of these:</p>
+
+    <div class="symptom-card">
+      <p class="quote">"It's confusing two of my projects."</p>
+      <p class="cause-label">Cause · Cross-project bleed</p>
+      <p>If two different efforts share keywords — "the auth rewrite", "the React dashboard", "the API client" — a memory fragment from one can surface in the other. Retrieval goes by similarity, not by which project you meant.</p>
+      <p><strong>Fix:</strong> use Projects as hard walls. One Project per distinct effort, with its own Instructions and Knowledge. If two projects are similar, make them <em>more</em> distinct in Instructions ("this is the <em>internal</em> dashboard, not the customer one"), not less.</p>
+    </div>
+
+    <div class="symptom-card">
+      <p class="quote">"It combined two separate decisions into one thing that never happened."</p>
+      <p class="cause-label">Cause · Summary conflation</p>
+      <p>When past conversations get summarised, related-but-distinct decisions can get fused. "We chose Postgres" and "we chose pgvector for search" can collapse into "we chose Postgres with pgvector" even if they were separate calls made weeks apart.</p>
+      <p><strong>Fix:</strong> anything important enough to get wrong belongs in Knowledge as a file you control — a <code>decisions.md</code>, an ADR, a spec. Don't leave high-stakes facts to be reconstructed from memory.</p>
+    </div>
+
+    <div class="symptom-card">
+      <p class="quote">"It's using an old version of a decision we already changed."</p>
+      <p class="cause-label">Cause · Stale memory</p>
+      <p>Memories don't automatically update when you change your mind. Both versions can coexist, and retrieval may surface the older one. Nothing is wrong with Claude — it's just doing what memory is designed to do.</p>
+      <p><strong>Fix:</strong> tell Claude explicitly: "forget what you know about X, the current state is Y." Or open the memory settings in the web app and delete the stale entry directly. Then update Instructions/Knowledge so the new state is authoritative.</p>
+    </div>
+
+    <div class="callout warn">
+      <strong>The bigger point:</strong> if you're noticing "mixing" often, it means you're using memory as a store of record. That's not what it's for. Memory is a nudge — Instructions and Knowledge are the record.
+    </div>
+  </section>
+
+  <!-- ─── SECTION 4: HOW TO SET IT UP ──────────────────────────────────── -->
+  <section class="section" id="setup">
+    <div class="section-label">Practical setup</div>
+    <h2>How to make this stop happening</h2>
+    <p>Most "Claude is getting worse" complaints on the web come down to the same structural fix: stop trusting memory for things memory was never meant to hold, and move those things into the layers that are reliable.</p>
+
+    <ul class="fix-list">
+      <li><strong>One Project per distinct effort.</strong> Don't pile unrelated work into one catch-all Project — that's the main source of cross-project bleed.</li>
+      <li><strong>Write real Project Instructions.</strong> Role, preferences, style, hard rules, terminology. Treat it like a system prompt, because that's what it is.</li>
+      <li><strong>Upload canonical docs to Knowledge.</strong> Specs, schemas, decision logs, style guides. Anything you'd be annoyed to re-explain.</li>
+      <li><strong>Keep a <code>decisions.md</code> in Knowledge.</strong> Append new decisions with dates. When something changes, edit the file — don't hope memory caught it.</li>
+      <li><strong>Don't let a single chat sprawl.</strong> When you switch tasks, start a new conversation. Long chats compress old turns and drift.</li>
+      <li><strong>Audit memory occasionally.</strong> Open memory settings in the web app, skim what's there, delete anything stale or wrong.</li>
+      <li><strong>Say "forget that" out loud.</strong> When you spot a wrong memory in the moment, correct it explicitly — Claude can remove or overwrite memory entries on request.</li>
+      <li><strong>Say "remember that" out loud.</strong> Memory auto-captures aggressively but not perfectly. If a fact matters, name it so it's definitely captured.</li>
+    </ul>
+
+    <div class="callout">
+      <strong>One-liner test:</strong> if losing the memory system tomorrow would break your workflow, you're over-relying on it. The Project Instructions + Knowledge should carry the weight. Memory is the cherry on top.
+    </div>
+  </section>
+
+  <!-- ─── SECTION 5: WEB VS CODE ───────────────────────────────────────── -->
+  <section class="section" id="web-vs-code">
+    <div class="section-label">Comparison</div>
+    <h2>Web memory vs Claude Code memory</h2>
+    <p>If you also use Claude Code (the CLI), its local memory system is a completely different thing — and worth knowing, because the mental models don't transfer.</p>
+
+    <table class="ref-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Claude.ai (Web)</th>
+          <th>Claude Code (CLI)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Storage</td>
+          <td>Server-side, managed by Anthropic</td>
+          <td>Local Markdown files on your machine</td>
+        </tr>
+        <tr>
+          <td>What you can see</td>
+          <td>Memory settings panel — edit / delete entries</td>
+          <td>Full file contents in your config directory</td>
+        </tr>
+        <tr>
+          <td>Scope</td>
+          <td>Per-Project (and partly per-account)</td>
+          <td>Per-project working directory</td>
+        </tr>
+        <tr>
+          <td>How it's loaded</td>
+          <td>Retrieved by similarity (search)</td>
+          <td>Index file loaded every session</td>
+        </tr>
+        <tr>
+          <td>Failure mode</td>
+          <td>Forgets, mixes, conflates</td>
+          <td>Gets stale — but you can read and fix it</td>
+        </tr>
+        <tr>
+          <td>Canonical facts go in</td>
+          <td>Project Instructions + Knowledge</td>
+          <td><code>CLAUDE.md</code> + memory files</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:20px;">Both systems share the same principle: <strong>don't rely on implicit memory for things that matter.</strong> On the web, promote facts into Instructions or Knowledge. In Code, put them in <code>CLAUDE.md</code> or a named memory file. In both cases, the fix for "Claude keeps forgetting" is to stop asking memory to do a job it isn't built for.</p>
+  </section>
+
+  <!-- ─── FOOTER ─────────────────────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <p>Claude.ai · Web Memory · Reference Guide · 2026</p>
+  </footer>
+
+</div>
+<script src="../nav.js"></script>
+</body>
+</html>

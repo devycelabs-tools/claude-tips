@@ -7,6 +7,11 @@
       "desc": "Persistent cross-session memory with CLAUDE.md and memory files"
     },
     {
+      "title": "Web Memory Guide",
+      "url": "web-memory-guide/",
+      "desc": "Why Claude on the web forgets and mixes things up — and how to set up Projects so it stops"
+    },
+    {
       "title": "Context Hygiene",
       "url": "context-hygiene/",
       "desc": "Keep your context window fresh and avoid running out mid-task"
