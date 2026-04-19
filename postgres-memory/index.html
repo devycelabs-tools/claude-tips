@@ -66,21 +66,7 @@
       color: var(--muted);
       max-width: 640px;
     }
-    .prereq-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 22px;
-      padding: 6px 14px;
-      background: rgba(124,106,247,.1);
-      border: 1px solid rgba(124,106,247,.25);
-      border-radius: 20px;
-      font-size: 13px;
-      color: var(--muted);
-    }
-    .prereq-pill a { font-weight: 600; }
-
-    .section { margin-bottom: 64px; }
+.section { margin-bottom: 64px; }
     .section-label {
       display: inline-flex;
       align-items: center;
@@ -270,12 +256,9 @@
 
   <!-- ─── HEADER ──────────────────────────────────────────────────────────── -->
   <header class="site-header">
-    <div class="eyebrow">Claude Code Tips · Advanced Memory</div>
+    <div class="eyebrow"><a href="../" style="color:inherit;text-decoration:none;">Claude Code Tips</a> <span style="opacity:.4;margin:0 6px;">›</span> <a href="../memory-guide/" style="color:inherit;text-decoration:none;">Memory Guide</a> <span style="opacity:.4;margin:0 6px;">›</span> Postgres Memory</div>
     <h1>Persistent Memory<br>with Postgres + MCP</h1>
     <p class="subtitle">Give Claude searchable, tagged, semantic memory that survives indefinitely — wired into every session automatically via hooks.</p>
-    <div class="prereq-pill">
-      Builds on: <a href="../memory-guide/">Memory Guide (Tier 1 — local files)</a> — read that first if you haven't
-    </div>
   </header>
 
   <!-- ─── WHAT THIS ADDS ──────────────────────────────────────────────────── -->
