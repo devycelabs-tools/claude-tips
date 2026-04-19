@@ -38,7 +38,7 @@
       a.className = '__ct-nav-link';
       a.href = base + page.url;
       a.textContent = page.title;
-      if (currentPath.indexOf(page.url.replace(/\/$/, '')) !== -1) {
+      if (currentPath.indexOf('/' + page.url.replace(/\/$/, '') + '/') !== -1 || currentPath.endsWith('/' + page.url.replace(/\/$/, ''))) {
         a.className += ' __ct-active';
       }
       links.appendChild(a);
