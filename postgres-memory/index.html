@@ -468,6 +468,56 @@
     </div>
   </section>
 
+  <!-- ─── VECTOR SEARCH ──────────────────────────────────────────────────── -->
+  <section class="section" id="vector-search">
+    <div class="section-label">Vector Search</div>
+    <h2>How semantic search works</h2>
+    <p>Tags and full-text search find what you asked for. Vector search finds what you <em>meant</em>. Here's the full pipeline, end to end.</p>
+
+    <h3 style="margin-top:28px;">The model — voyage-4-nano</h3>
+    <p><strong>voyage-4-nano</strong> is Voyage AI's smallest embedding model, designed for retrieval. It runs locally as a containerised HTTP microservice — no API key, no external calls, fully offline. The variant used here is a quantized GGUF build (<code>q8_0</code>) with a linear projection layer that outputs <strong>2048-dimensional vectors</strong>.</p>
+    <p>On a budget homelab CPU (i5-10500T) it embeds at roughly <strong>2–3 chunks per second</strong>. That's slow enough to notice on a bulk ingest, but fast enough that a single <code>memory_save</code> or <code>rag_search</code> call completes without blocking. The MCP server calls it over HTTP and degrades gracefully if it's unreachable — memories are saved without embeddings and can be ingested in a later batch run.</p>
+
+    <h3 style="margin-top:28px;">The embedder API</h3>
+    <p>One endpoint is all the MCP server needs:</p>
+
+    <div class="flow-block" style="white-space:pre-wrap;line-height:1.8;">POST /embed
+Content-Type: application/json
+
+{ "text": "the text to embed" }
+
+→ { "ok": true, "embeddings": [[0.021, -0.134, ...]] }   <span class="dim">// 2048 floats</span>
+
+GET /healthz  →  { "ok": true, "model": "voyage-4-nano-q8_0+linear", "dim": 2048 }</div>
+
+    <p>On <code>memory_save</code>, the MCP server concatenates the summary, detail, and tags into one string and sends it to <code>/embed</code>. The returned vector is stored alongside the text in <code>knowledge_chunks</code>. On <code>rag_search</code>, the query string is embedded the same way and the resulting vector is used for similarity search.</p>
+
+    <h3 style="margin-top:28px;">Storage — pgvector + IVFFlat index</h3>
+    <p>Vectors are stored in the <code>knowledge_chunks</code> table as a <code>vector(2048)</code> column. pgvector adds an <strong>IVFFlat index</strong> (<code>vector_cosine_ops</code>) that makes approximate nearest-neighbour search fast at scale.</p>
+
+    <div class="callout amber">
+      <strong>IVFFlat needs rows to build.</strong> The index creation is deferred until the table has data — building it on an empty table produces a useless index. The schema migration script checks row count and skips index creation if the table is empty; run it again after your first bulk ingest.
+    </div>
+
+    <h3 style="margin-top:28px;">Search — cosine similarity via the <code>&lt;=&gt;</code> operator</h3>
+    <p>pgvector's <code>&lt;=&gt;</code> operator computes cosine <em>distance</em> (0 = identical, 2 = opposite). The query converts it to similarity with <code>1 - (embedding &lt;=&gt; query_vec)</code>, then orders ascending by distance so the closest chunks come first:</p>
+
+    <div class="flow-block" style="white-space:pre-wrap;line-height:1.8;">SELECT content, chunk_type, 1 - (embedding <=> $query_vec) AS similarity
+FROM knowledge_chunks
+WHERE sanitize_status IN ('passed', 'cleared')
+ORDER BY embedding <=> $query_vec   <span class="dim">-- ascending distance = descending similarity</span>
+LIMIT 5;</div>
+
+    <p>The <code>rag_search</code> tool accepts a <code>threshold</code> parameter (0.0–1.0) to filter out low-confidence results. In practice a threshold of 0.5–0.6 removes noise without losing genuinely relevant matches.</p>
+
+    <h3 style="margin-top:28px;">Bulk ingest for existing memories</h3>
+    <p>New memories are auto-embedded on save. For memories that existed before the embedder was set up, an ingest script does a catch-up pass — it reads every row in the <code>memory</code> table, checks whether a corresponding <code>knowledge_chunks</code> row already exists (by <code>file_path = 'data-mcp/memory/{id}'</code>), skips those, and embeds the rest. Safe to re-run at any time.</p>
+
+    <div class="callout green">
+      <strong>Content is the durable asset. Vectors are disposable cache.</strong> If you swap embedding models or migrate databases, don't move the vectors — re-run the ingest script against the new model. The text in <code>content</code> always survives; the numbers in <code>embedding</code> are just an index over it.
+    </div>
+  </section>
+
   <!-- ─── MCP TOOLS ───────────────────────────────────────────────────────── -->
   <section class="section" id="tools">
     <div class="section-label">MCP Tools</div>
@@ -557,8 +607,8 @@
       </div>
       <div class="card">
         <h3>Local embedder (optional)</h3>
-        <p>An HTTP microservice wrapping a local embedding model for <code>rag_search</code>. Any model works. If unavailable, memories are still saved — embedding just fails silently and can be ingested later.</p>
-        <p>voyage-4-nano runs at ~2–3 chunks/sec on a mid-range CPU.</p>
+        <p>A small HTTP microservice that wraps a local embedding model and exposes a single <code>POST /embed</code> endpoint. The MCP server calls it on every <code>memory_save</code> and <code>rag_search</code>.</p>
+        <p>The setup described in this guide uses <strong>voyage-4-nano</strong> running fully offline — no API key, no external calls. At ~2.75 chunks/sec on a budget homelab CPU it's slow enough that you notice it, but fast enough that it never blocks anything. See the <a href="#vector-search">Vector Search section</a> below for the full pipeline.</p>
       </div>
       <div class="card">
         <h3>Claude Code hooks</h3>
