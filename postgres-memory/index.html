@@ -293,29 +293,78 @@
     <h2>How the pieces fit together</h2>
     <p>Five components work together. The hooks are the glue that makes memory automatic — without them you have storage but no automatic recall.</p>
 
-    <div class="flow-block"><span class="dim">  DESKTOP (where Claude Code runs)</span>
-  ┌─────────────────────────────────────────────────────────┐
-  │  <span class="hi">MEMORY.md index</span>   always-on, auto-loads via system-reminder  │
-  │  <span class="hi">Memory .md files</span>  lazy-loaded from ~/.claude/projects/memory/  │
-  │                                                         │
-  │  <span class="tier-hook">Claude Code hooks</span>   SessionStart · PreCompact · PostCompact   │
-  │         │                                               │
-  │         ▼ MCP tool calls (stdio)                        │
-  │  <span class="hi2">data-mcp client</span>   Python FastMCP, registered in ~/.claude.json   │
-  └──────────────────────────┬──────────────────────────────┘
-                             │ stdio
-  <span class="dim">  SERVER (Docker)</span>            │
-  ┌──────────────────────────▼──────────────────────────────┐
-  │  <span class="hi2">data-mcp server</span>   FastMCP, stdio transport                  │
-  │         │                                               │
-  │         ├──▶ <span class="ok">memory table</span>    tags + FTS + tsvector             │
-  │         ├──▶ <span class="ok">knowledge_chunks</span> pgvector embeddings               │
-  │         ├──▶ <span class="ok">checkpoints</span>     session context snapshots          │
-  │         └──▶ <span class="ok">kv_store</span>        ephemeral key-value state           │
-  │                    │                                    │
-  │             <span class="warn">PostgreSQL + pgvector</span>                          │
-  │             <span class="warn">Local embedder</span>  (voyage-4-nano or equivalent)    │
-  └─────────────────────────────────────────────────────────┘</div>
+    <div style="margin:24px 0;font-size:13px;font-family:var(--font-mono);">
+
+      <!-- Desktop box -->
+      <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+        <div style="background:var(--surface-2);padding:8px 16px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);">Desktop — where Claude Code runs</div>
+        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:baseline;gap:12px;">
+            <span style="color:#7c6af7;min-width:140px;">MEMORY.md index</span>
+            <span style="color:var(--muted);">always-on, auto-loads via system-reminder</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:12px;">
+            <span style="color:#7c6af7;min-width:140px;">Memory .md files</span>
+            <span style="color:var(--muted);">lazy-loaded from ~/.claude/projects/memory/</span>
+          </div>
+          <div style="height:1px;background:var(--border);margin:4px 0;"></div>
+          <div style="display:flex;align-items:baseline;gap:12px;">
+            <span style="color:#f5a623;min-width:140px;">Claude Code hooks</span>
+            <span style="color:var(--muted);">SessionStart · PreCompact · PostCompact</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:12px;">
+            <span style="color:#a396ff;min-width:140px;">data-mcp client</span>
+            <span style="color:var(--muted);">Python FastMCP, registered in ~/.claude.json</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connector -->
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 0;color:var(--muted);">
+        <div style="width:1px;height:28px;background:var(--border);margin:0 auto;position:relative;left:0;">
+        </div>
+      </div>
+      <div style="text-align:center;color:var(--muted);font-size:12px;margin:-18px 0 6px;letter-spacing:.08em;">stdio</div>
+
+      <!-- Server box -->
+      <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-top:6px;">
+        <div style="background:var(--surface-2);padding:8px 16px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);">Server — Docker</div>
+        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:baseline;gap:12px;">
+            <span style="color:#a396ff;min-width:140px;">data-mcp server</span>
+            <span style="color:var(--muted);">FastMCP, stdio transport</span>
+          </div>
+          <div style="height:1px;background:var(--border);margin:4px 0;"></div>
+          <div style="display:flex;flex-direction:column;gap:8px;padding-left:20px;border-left:2px solid var(--border);">
+            <div style="display:flex;align-items:baseline;gap:12px;">
+              <span style="color:#3ecf8e;min-width:120px;">memory table</span>
+              <span style="color:var(--muted);">tags + FTS + tsvector</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:12px;">
+              <span style="color:#3ecf8e;min-width:120px;">knowledge_chunks</span>
+              <span style="color:var(--muted);">pgvector embeddings</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:12px;">
+              <span style="color:#3ecf8e;min-width:120px;">checkpoints</span>
+              <span style="color:var(--muted);">session context snapshots</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:12px;">
+              <span style="color:#3ecf8e;min-width:120px;">kv_store</span>
+              <span style="color:var(--muted);">ephemeral key-value state</span>
+            </div>
+          </div>
+          <div style="height:1px;background:var(--border);margin:4px 0;"></div>
+          <div style="display:flex;align-items:baseline;gap:12px;">
+            <span style="color:#f5a623;min-width:140px;">PostgreSQL + pgvector</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:12px;">
+            <span style="color:#f5a623;min-width:140px;">Local embedder</span>
+            <span style="color:var(--muted);">voyage-4-nano or equivalent</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
   </section>
 
   <!-- ─── SESSION LIFECYCLE ───────────────────────────────────────────────── -->
