@@ -12,6 +12,11 @@
       "desc": "Why Claude on the web forgets and mixes things up — and how to set up Projects so it stops"
     },
     {
+      "title": "Postgres Memory",
+      "url": "postgres-memory/",
+      "desc": "Searchable, tagged, semantic memory backed by Postgres + MCP — with session hooks and context-compaction recovery"
+    },
+    {
       "title": "Context Hygiene",
       "url": "context-hygiene/",
       "desc": "Keep your context window fresh and avoid running out mid-task"

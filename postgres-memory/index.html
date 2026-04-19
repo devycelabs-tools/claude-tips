@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Persistent Memory: Postgres + MCP</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-2: #22263a;
+      --border: #2e3350;
+      --accent: #7c6af7;
+      --accent-dim: #4f3fc7;
+      --green: #3ecf8e;
+      --amber: #f5a623;
+      --red: #e55353;
+      --text: #e8eaf0;
+      --muted: #8b90a8;
+      --code-bg: #141720;
+      --radius: 10px;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .page-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    .site-header {
+      padding: 56px 0 40px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 56px;
+    }
+    .site-header .eyebrow {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+    .site-header h1 {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 800;
+      letter-spacing: -.02em;
+      line-height: 1.15;
+      margin-bottom: 18px;
+    }
+    .site-header .subtitle {
+      font-size: 18px;
+      color: var(--muted);
+      max-width: 640px;
+    }
+    .prereq-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 22px;
+      padding: 6px 14px;
+      background: rgba(124,106,247,.1);
+      border: 1px solid rgba(124,106,247,.25);
+      border-radius: 20px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .prereq-pill a { font-weight: 600; }
+
+    .section { margin-bottom: 64px; }
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+    .section-label::before {
+      content: '';
+      display: block;
+      width: 18px;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+    h2 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+      margin-bottom: 14px;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    p { color: var(--muted); margin-bottom: 14px; }
+    p strong { color: var(--text); }
+    p:last-child { margin-bottom: 0; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .card > *:last-child { margin-bottom: 0; }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .card-grid .card { margin-bottom: 0; }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
+
+    .tier-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 20px;
+      margin-bottom: 10px;
+    }
+    .tier-1 { background: rgba(62,207,142,.15); color: #3ecf8e; }
+    .tier-2 { background: rgba(124,106,247,.18); color: #a396ff; }
+    .tier-hook { background: rgba(245,166,35,.15); color: #f5c04a; }
+
+    .prompt-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin: 16px 0;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: #c7cbe0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .prompt-block .prompt-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    .flow-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      margin: 16px 0;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 2;
+      white-space: pre;
+      overflow-x: auto;
+      color: var(--text);
+    }
+    .flow-block .dim { color: var(--muted); }
+    .flow-block .hi { color: var(--accent); }
+    .flow-block .hi2 { color: #a396ff; }
+    .flow-block .ok { color: var(--green); }
+    .flow-block .warn { color: var(--amber); }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    .data-table th {
+      background: var(--surface-2);
+      color: var(--accent);
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .data-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      color: var(--muted);
+    }
+    .data-table td:first-child { color: #93c5fd; font-family: var(--font-mono); font-size: 13px; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table strong { color: var(--text); }
+
+    .callout {
+      background: rgba(124,106,247,.07);
+      border: 1px solid rgba(124,106,247,.2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: 16px 20px;
+      margin: 16px 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .callout strong { color: var(--text); }
+    .callout.green {
+      background: rgba(62,207,142,.07);
+      border-color: rgba(62,207,142,.2);
+      border-left-color: var(--green);
+    }
+    .callout.amber {
+      background: rgba(245,166,35,.07);
+      border-color: rgba(245,166,35,.2);
+      border-left-color: var(--amber);
+    }
+
+    code {
+      background: var(--code-bg);
+      color: #93c5fd;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.875em;
+    }
+
+    ul, ol { padding-left: 20px; margin-bottom: 14px; }
+    li { color: var(--muted); margin-bottom: 6px; }
+    li strong { color: var(--text); }
+
+    .site-footer {
+      padding: 40px 0 20px;
+      border-top: 1px solid var(--border);
+      margin-top: 20px;
+    }
+    .site-footer p { font-size: 13px; color: var(--muted); }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- ─── HEADER ──────────────────────────────────────────────────────────── -->
+  <header class="site-header">
+    <div class="eyebrow">Claude Code Tips · Advanced Memory</div>
+    <h1>Persistent Memory<br>with Postgres + MCP</h1>
+    <p class="subtitle">Give Claude searchable, tagged, semantic memory that survives indefinitely — wired into every session automatically via hooks.</p>
+    <div class="prereq-pill">
+      Builds on: <a href="../memory-guide/">Memory Guide (Tier 1 — local files)</a> — read that first if you haven't
+    </div>
+  </header>
+
+  <!-- ─── WHAT THIS ADDS ──────────────────────────────────────────────────── -->
+  <section class="section" id="what">
+    <div class="section-label">Overview</div>
+    <h2>What this adds over file memory</h2>
+    <p>The <a href="../memory-guide/">Memory Guide</a> covers local Markdown files — zero infra, works out of the box. This guide adds a second tier on top: a Postgres-backed MCP server that gives Claude real search, automatic session hooks, and context continuity across compaction.</p>
+
+    <div class="two-col" style="margin-top: 24px;">
+      <div class="card">
+        <div class="tier-badge tier-1">Tier 1 · Already covered</div>
+        <h3>Local file memory</h3>
+        <p>Typed <code>.md</code> files in <code>~/.claude/projects/</code>. <code>MEMORY.md</code> index auto-loads each session. No infrastructure needed.</p>
+        <p><strong>Limitation:</strong> No search. Claude reads files on demand but can't query across them. No session hooks. No context-compaction recovery.</p>
+      </div>
+      <div class="card">
+        <div class="tier-badge tier-2">Tier 2 · This guide</div>
+        <h3>Postgres MCP memory</h3>
+        <p>A Python MCP server backed by PostgreSQL. Tag filtering, full-text search, vector semantic search, session hooks, and checkpoint/restore across context compaction.</p>
+        <p><strong>Requires:</strong> A server running Docker (homelab, VPS, or local machine).</p>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top: 24px;">
+      <strong>Don't have a server?</strong> Tier 1 alone gives you 80% of the value. Come back to this guide when you have infrastructure and want search + hooks.
+    </div>
+  </section>
+
+  <!-- ─── ARCHITECTURE ────────────────────────────────────────────────────── -->
+  <section class="section" id="architecture">
+    <div class="section-label">Architecture</div>
+    <h2>How the pieces fit together</h2>
+    <p>Five components work together. The hooks are the glue that makes memory automatic — without them you have storage but no automatic recall.</p>
+
+    <div class="flow-block"><span class="dim">  DESKTOP (where Claude Code runs)</span>
+  ┌─────────────────────────────────────────────────────────┐
+  │  <span class="hi">MEMORY.md index</span>   always-on, auto-loads via system-reminder  │
+  │  <span class="hi">Memory .md files</span>  lazy-loaded from ~/.claude/projects/memory/  │
+  │                                                         │
+  │  <span class="tier-hook">Claude Code hooks</span>   SessionStart · PreCompact · PostCompact   │
+  │         │                                               │
+  │         ▼ MCP tool calls (stdio)                        │
+  │  <span class="hi2">data-mcp client</span>   Python FastMCP, registered in ~/.claude.json   │
+  └──────────────────────────┬──────────────────────────────┘
+                             │ stdio
+  <span class="dim">  SERVER (Docker)</span>            │
+  ┌──────────────────────────▼──────────────────────────────┐
+  │  <span class="hi2">data-mcp server</span>   FastMCP, stdio transport                  │
+  │         │                                               │
+  │         ├──▶ <span class="ok">memory table</span>    tags + FTS + tsvector             │
+  │         ├──▶ <span class="ok">knowledge_chunks</span> pgvector embeddings               │
+  │         ├──▶ <span class="ok">checkpoints</span>     session context snapshots          │
+  │         └──▶ <span class="ok">kv_store</span>        ephemeral key-value state           │
+  │                    │                                    │
+  │             <span class="warn">PostgreSQL + pgvector</span>                          │
+  │             <span class="warn">Local embedder</span>  (voyage-4-nano or equivalent)    │
+  └─────────────────────────────────────────────────────────┘</div>
+  </section>
+
+  <!-- ─── SESSION LIFECYCLE ───────────────────────────────────────────────── -->
+  <section class="section" id="lifecycle">
+    <div class="section-label">Session Lifecycle</div>
+    <h2>What happens in a session</h2>
+    <p>Three hooks wire memory into the session lifecycle automatically. You don't have to ask Claude to recall anything — it just happens.</p>
+
+    <div class="card" style="margin-top: 24px;">
+      <div class="tier-badge tier-hook">Hook 1 · SessionStart</div>
+      <h3>Surface pending work at the start</h3>
+      <p>The <code>SessionStart</code> hook fires before Claude sees your first message. It injects a <code>system-reminder</code> telling Claude to call <code>memory_search</code> with specific tags before responding.</p>
+      <p>You choose the tags. Common pattern: <code>pending-review</code> for things needing attention, <code>backlog</code> for parked work, <code>todo</code> for open tasks. Any memory saved with those tags surfaces automatically at the top of the next session.</p>
+    </div>
+
+    <div class="card">
+      <div class="tier-badge tier-hook">Hook 2 · PreCompact</div>
+      <h3>Save working context before compression</h3>
+      <p>When Claude Code compresses the conversation context (to free the context window), Claude loses its short-term working memory. The <code>PreCompact</code> hook fires just before that happens and calls <code>checkpoint_save</code>.</p>
+      <p>The checkpoint captures: what Claude is working on, decisions made this session, critical facts, and unresolved items.</p>
+    </div>
+
+    <div class="card">
+      <div class="tier-badge tier-hook">Hook 3 · PostCompact</div>
+      <h3>Restore working context after compression</h3>
+      <p>The <code>PostCompact</code> hook fires after compression. It calls <code>checkpoint_restore</code>, fetches the last saved checkpoint, and injects it as a <code>system-reminder</code>. Claude resumes with reconstructed working state.</p>
+      <p>This is called <strong>Hippocampal Replay</strong> — named after the neuroscience mechanism where the brain re-activates short-term memories during sleep to transfer them to long-term storage.</p>
+    </div>
+
+    <div class="flow-block" style="margin-top: 24px;"><span class="dim">── A TYPICAL SESSION ──────────────────────────────────────────────────</span>
+
+  <span class="hi">Session opens</span>
+    MEMORY.md auto-loads (always-on)
+    SessionStart hook → memory_search(pending-review, backlog, todo)
+    Claude surfaces any items before responding to you
+
+  <span class="hi">You work with Claude</span>
+    Claude calls memory_search() when it needs to recall something
+    Claude calls kv_set/kv_get for ephemeral tool state
+    On accepted decisions → auto-saves via memory_save()
+
+  <span class="warn">Context gets long → compaction triggered</span>
+    PreCompact hook → checkpoint_save(working_on, decisions, facts, unresolved)
+    Context compressed → short-term memory gone
+
+  <span class="ok">Claude resumes</span>
+    PostCompact hook → checkpoint_restore()
+    Working context injected as system-reminder
+    Claude continues as if nothing happened</div>
+  </section>
+
+  <!-- ─── DATA MODEL ───────────────────────────────────────────────────────── -->
+  <section class="section" id="data-model">
+    <div class="section-label">Data Model</div>
+    <h2>What gets stored in Postgres</h2>
+
+    <h3>The <code>memory</code> table</h3>
+    <p>The primary memory store. Every call to <code>memory_save</code> writes here. Searchable by tag array (GIN index) and full-text (tsvector trigger).</p>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
+      <tr><td>id</td><td>BIGSERIAL</td><td>Primary key — reference this to fetch or delete a specific memory</td></tr>
+      <tr><td>ts</td><td>TIMESTAMPTZ</td><td>When saved (auto)</td></tr>
+      <tr><td>tags</td><td>TEXT[]</td><td>Array of tags — GIN indexed for fast <code>@&gt;</code> containment queries. All tags in your query must match.</td></tr>
+      <tr><td>summary</td><td>TEXT</td><td>Short one-line description. Used for FTS and for display in search results.</td></tr>
+      <tr><td>detail</td><td>TEXT</td><td>Optional long-form content — the why, the context, the constraints.</td></tr>
+      <tr><td>source</td><td>TEXT</td><td>Who saved it: <code>claude</code>, <code>user</code>, <code>hook</code></td></tr>
+      <tr><td>search_vector</td><td>tsvector</td><td>FTS index maintained by trigger from summary + detail. Never write to this directly.</td></tr>
+    </table>
+
+    <div class="callout">
+      <strong>Write summaries with natural search vocabulary.</strong> FTS is literal until you have vector search enabled — it finds words, not concepts. If you search for "database timeout" later, the memory needs to contain those words. Avoid jargon or abbreviations in summaries.
+    </div>
+
+    <h3 style="margin-top: 32px;">The <code>knowledge_chunks</code> table (semantic / RAG search)</h3>
+    <p>When a memory is saved, it is also embedded into <code>knowledge_chunks</code> via a local embedding model. This powers <code>rag_search</code> — cosine similarity search via pgvector's <code>&lt;=&gt;</code> operator.</p>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Purpose</th></tr>
+      <tr><td>content</td><td><strong>The durable asset</strong> — text that survives any model change. Never store only the vector.</td></tr>
+      <tr><td>embedding</td><td><code>vector(N)</code> — rebuildable cache. If you swap embedding models, re-ingest from content.</td></tr>
+      <tr><td>embed_model</td><td>Which model produced this vector. Lets you filter or selectively re-embed after a model upgrade.</td></tr>
+      <tr><td>tier</td><td><code>active</code> | <code>archive</code> — demote old chunks, never delete. Keeps history while focusing search on current data.</td></tr>
+      <tr><td>sanitize_status</td><td><code>passed</code> | <code>quarantined</code> | <code>cleared</code> — security gate. Only <code>passed</code>/<code>cleared</code> chunks are returned by rag_search.</td></tr>
+      <tr><td>chunk_type</td><td><code>code</code> | <code>config</code> | <code>docs</code> | <code>synthesis</code> | <code>scribe</code> — filter searches by type</td></tr>
+      <tr><td>file_path / repo</td><td>Provenance — where this chunk came from. Memories use <code>data-mcp/memory/{id}</code> as a pointer back to the memory row.</td></tr>
+    </table>
+
+    <h3 style="margin-top: 32px;">Other tables</h3>
+    <div class="two-col">
+      <div class="card">
+        <h3>checkpoints</h3>
+        <p>Stores the structured working-state snapshot written by PreCompact and read by PostCompact. Fields: <code>working_on</code>, <code>decisions[]</code>, <code>critical_facts[]</code>, <code>unresolved[]</code>.</p>
+        <p>Always fetches the most recent checkpoint. Only the last one matters.</p>
+      </div>
+      <div class="card">
+        <h3>kv_store</h3>
+        <p>Simple key-value JSON store for ephemeral state that needs to outlive a single tool call but isn't worth a full memory. Job IDs, flags, tool state, UI cursors.</p>
+        <p><strong>Not for memories</strong> — use the memory table for anything that should outlive a session.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── MCP TOOLS ───────────────────────────────────────────────────────── -->
+  <section class="section" id="tools">
+    <div class="section-label">MCP Tools</div>
+    <h2>Tools Claude gets</h2>
+    <p>The data-mcp server exposes these as Claude Code MCP tool calls. Claude can call them in any session where the MCP is registered.</p>
+
+    <table class="data-table">
+      <tr><th>Tool</th><th>What it does</th></tr>
+      <tr><td>memory_save</td><td>Save a memory. Requires <code>summary</code> + optional <code>tags[]</code> and <code>detail</code>. Auto-embeds into knowledge_chunks on write.</td></tr>
+      <tr><td>memory_search</td><td>Search by tags AND/OR full-text. Tag query uses GIN <code>@&gt;</code> — all supplied tags must be present. FTS uses <code>plainto_tsquery</code> with <code>ts_rank</code> ordering.</td></tr>
+      <tr><td>memory_get</td><td>Fetch one memory by ID — useful when the index summary isn't enough and you need the full detail.</td></tr>
+      <tr><td>memory_delete</td><td>Remove a memory permanently by ID.</td></tr>
+      <tr><td>rag_search</td><td>Semantic vector search. Queries the local embedder → cosine similarity via pgvector. Use when keyword search misses the mark ("find something about auth timeouts" vs. exact phrase match).</td></tr>
+      <tr><td>kv_set / kv_get / kv_list / kv_delete</td><td>Key-value store. JSON values, upsert on conflict.</td></tr>
+      <tr><td>checkpoint_save</td><td>Write a session checkpoint. Called by PreCompact hook. Pass structured fields, not a free-form dump.</td></tr>
+      <tr><td>checkpoint_restore</td><td>Fetch the latest checkpoint. Called by PostCompact hook.</td></tr>
+      <tr><td>log_action / get_logs</td><td>Audit trail — what Claude did, when, to what, with what result. Useful for reviewing what happened in past sessions.</td></tr>
+    </table>
+
+    <div class="callout green">
+      <strong>memory_search vs rag_search:</strong> Use <code>memory_search</code> for categorical recall (give me all <code>backlog</code> items) and known-phrase lookup. Use <code>rag_search</code> for fuzzy "find something like X" — it matches meaning, not words. In practice, start with tags, fall back to FTS, then semantic.
+    </div>
+  </section>
+
+  <!-- ─── AUTO-SAVE RULES ─────────────────────────────────────────────────── -->
+  <section class="section" id="auto-save">
+    <div class="section-label">CLAUDE.md Rules</div>
+    <h2>When Claude should auto-save</h2>
+    <p>Memory saves should be automatic — you shouldn't need to ask each time. Define these rules in your <code>CLAUDE.md</code>:</p>
+
+    <div class="card">
+      <h3>Save without asking when:</h3>
+      <ul>
+        <li>A new service, component, or dependency is proposed <strong>and accepted</strong></li>
+        <li>An architectural direction is chosen over alternatives — the "we went with X not Y" moment</li>
+        <li>A non-obvious technical constraint or gotcha is discovered</li>
+        <li>You explicitly say "remember that…"</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>Do NOT save:</h3>
+      <ul>
+        <li>In-progress work or temporary state — use checkpoints for that</li>
+        <li>Obvious choices where no alternatives were considered</li>
+        <li>Things already in CLAUDE.md or the existing memory files (check first)</li>
+        <li>Code patterns — those are derivable by reading the repo</li>
+        <li>Ephemeral task details that only matter this session</li>
+      </ul>
+    </div>
+
+    <div class="callout amber">
+      <strong>The "why" is what makes memories useful.</strong> A memory that says "use Postgres" is useless. A memory that says "use Postgres — we switched from SQLite after the migration failed under concurrent writes" tells Claude why and lets it apply the principle to edge cases.
+    </div>
+
+    <p>The feedback and project memory types are especially important here — they preserve the reasoning behind decisions, not just the outcome. See the <a href="../memory-guide/">Memory Guide</a> for memory type details.</p>
+  </section>
+
+  <!-- ─── RECALL ORDER ────────────────────────────────────────────────────── -->
+  <section class="section" id="recall">
+    <div class="section-label">Recall Strategy</div>
+    <h2>How Claude should look for context</h2>
+    <p>Define this order in your CLAUDE.md. It prevents Claude from going straight to slow or expensive lookups when faster ones would work:</p>
+
+    <div class="flow-block">  1. <span class="hi">CLAUDE.md</span>          always in context — check here first, never redundantly recall
+  2. <span class="hi">MEMORY.md index</span>    auto-loaded — scan for relevant files, then fetch on demand
+  3. <span class="hi2">memory_search()</span>    tag or FTS query when the index isn't enough
+  4. <span class="hi2">rag_search()</span>       semantic search for fuzzy "find something like X" queries
+  <span class="dim">5. Ask the user</span>    last resort — don't scan local files unprompted</div>
+  </section>
+
+  <!-- ─── STACK ────────────────────────────────────────────────────────────── -->
+  <section class="section" id="stack">
+    <div class="section-label">Stack</div>
+    <h2>What you need to run this</h2>
+
+    <div class="card-grid">
+      <div class="card">
+        <h3>PostgreSQL + pgvector</h3>
+        <p>Docker image: <code>pgvector/pgvector:pg16</code></p>
+        <p>Needs <code>CREATE EXTENSION vector</code> after first start. The <code>memory</code> and <code>knowledge_chunks</code> tables are created by the MCP server on first boot.</p>
+      </div>
+      <div class="card">
+        <h3>data-mcp server</h3>
+        <p>Python FastMCP, stdio transport. One Python file + a schema migration file. Registered in Claude Code via <code>claude mcp add -s user</code>.</p>
+        <p>Transport is stdio — runs as a subprocess on your desktop, talks to Postgres over the network.</p>
+      </div>
+      <div class="card">
+        <h3>Local embedder (optional)</h3>
+        <p>An HTTP microservice wrapping a local embedding model for <code>rag_search</code>. Any model works. If unavailable, memories are still saved — embedding just fails silently and can be ingested later.</p>
+        <p>voyage-4-nano runs at ~2–3 chunks/sec on a mid-range CPU.</p>
+      </div>
+      <div class="card">
+        <h3>Claude Code hooks</h3>
+        <p>Configured in <code>settings.json</code>. SessionStart, PreCompact, PostCompact. Each hook is a shell command that prints a <code>system-reminder</code> to stdout — Claude Code injects that into the session.</p>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top: 24px;">
+      <strong>Minimum footprint:</strong> Postgres + pgvector container + the data-mcp Python file. Skip the embedder if you don't need semantic search — <code>memory_search</code> with tags and FTS covers most use cases without it.
+    </div>
+  </section>
+
+  <!-- ─── LIMITATIONS ──────────────────────────────────────────────────────── -->
+  <section class="section" id="limitations">
+    <div class="section-label">Limitations</div>
+    <h2>Known limitations and design notes</h2>
+
+    <div class="card">
+      <h3>FTS is literal until you add pgvector</h3>
+      <p><code>plainto_tsquery</code> does stemming but is still keyword-based. Searching "database caching" won't find a memory about "connection pooling". Use tags for categorical recall; use <code>rag_search</code> for fuzzy semantic queries. Write summaries with natural search vocabulary.</p>
+    </div>
+    <div class="card">
+      <h3>MEMORY.md truncates at ~200 lines</h3>
+      <p>It's always-on context — keep it lean. One line per memory, ~150 chars max. If it grows beyond that, the oldest entries get truncated out of the context window and become invisible to Claude without an explicit search.</p>
+    </div>
+    <div class="card">
+      <h3>No built-in deduplication</h3>
+      <p>If you save the same fact twice with different phrasing, you get two records. The CLAUDE.md rule to "check before saving" is soft — not enforced by the database. Over time this creates clutter. Periodically review and delete stale or duplicate memories via <code>memory_delete</code>.</p>
+    </div>
+    <div class="card">
+      <h3>Embeddings are a cache, not the source of truth</h3>
+      <p>If you migrate databases or swap embedding models, don't migrate vectors — re-ingest from the <code>content</code> column. The ingest script reads all memory rows and re-embeds anything not already in <code>knowledge_chunks</code>. Content is the durable asset; vectors are disposable.</p>
+    </div>
+    <div class="card">
+      <h3>Memory records can become stale</h3>
+      <p>A memory that cites a file path or function name was accurate when saved. File paths get renamed. Before acting on a recalled memory, verify against the current codebase. If a recalled memory conflicts with what you observe now, trust current state — and update or delete the stale memory.</p>
+    </div>
+  </section>
+
+  <!-- ─── IMPLEMENTATION PROMPTS ──────────────────────────────────────────── -->
+  <section class="section" id="prompts">
+    <div class="section-label">Getting Started</div>
+    <h2>Ask Claude to implement this</h2>
+    <p>Point Claude at this page and use one of these prompts:</p>
+
+    <h3 style="margin-top: 24px; margin-bottom: 8px;">Tier 1 only (no server needed)</h3>
+    <div class="prompt-block"><span class="prompt-label">paste into Claude Code</span>Read the Memory Guide at devycelabs-tools.github.io/claude-tips/memory-guide/ and set up Tier 1 local file memory for this project. Create the memory directory, MEMORY.md index, and add auto-save rules to CLAUDE.md.</div>
+
+    <h3 style="margin-top: 24px; margin-bottom: 8px;">Full two-tier setup</h3>
+    <div class="prompt-block"><span class="prompt-label">paste into Claude Code</span>Read the Postgres Memory guide at devycelabs-tools.github.io/claude-tips/postgres-memory/ and implement the full two-tier memory system. I have Docker available. Set up: the local MEMORY.md files and typed memory file structure, the Postgres + pgvector container, a Python FastMCP data-mcp server (stdio transport) with memory_save / memory_search / checkpoint_save / checkpoint_restore / kv_set / kv_get tools, and the SessionStart + PreCompact + PostCompact hooks in my Claude Code settings. Add auto-save rules to CLAUDE.md.</div>
+
+    <h3 style="margin-top: 24px; margin-bottom: 8px;">Add semantic search to an existing setup</h3>
+    <div class="prompt-block"><span class="prompt-label">paste into Claude Code</span>I already have the data-mcp Postgres memory system running. Help me add vector semantic search: swap the Postgres container to pgvector/pgvector:pg16, create the knowledge_chunks table with the schema from the Postgres Memory guide, add a rag_search tool to the MCP server, set up a local embedding microservice, and add an ingest script to embed existing memories into knowledge_chunks.</div>
+  </section>
+
+  <!-- ─── FOOTER ────────────────────────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <p>Claude Code · Postgres Memory System · Reference Guide · 2026</p>
+  </footer>
+
+</div>
+<script src="../nav.js"></script>
+</body>
+</html>
