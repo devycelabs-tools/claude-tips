@@ -41,6 +41,7 @@
       '}',
       '.__toc-link:hover{color:#8b90a8;background:rgba(255,255,255,.03);border-left-color:#2e3350;text-decoration:none;}',
       '.__toc-link.__toc-active{color:#7c6af7;border-left-color:#7c6af7;background:rgba(124,106,247,.06);}',
+      '@media(max-width:' + (BREAKPOINT - 1) + 'px){.__toc{display:none;}}',
     ].join('');
     document.head.appendChild(style);
 
